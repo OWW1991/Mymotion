@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from "react";
-import { Eye, EyeOff, Save, CheckCircle2 } from "lucide-react";
+import { Save, CheckCircle2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,59 +23,44 @@ interface Settings {
   workEndHour: number;
   workDays: string;
   timezone: string;
-  anthropicApiKey: string | null;
+  ollamaUrl: string;
+  ollamaModel: string;
 }
 
 function hourToTime(hour: number): string {
-  const h = String(hour).padStart(2, "0");
-  return `${h}:00`;
+  return `${String(hour).padStart(2, "0")}:00`;
 }
-
 function timeToHour(time: string): number {
   return parseInt(time.split(":")[0], 10);
 }
 
 export default function SettingsPage() {
   const { data: session } = useSession();
-  const [settings, setSettings] = React.useState<Settings | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = React.useState(false);
 
-  // Form state
   const [workStartHour, setWorkStartHour] = React.useState(9);
   const [workEndHour, setWorkEndHour] = React.useState(18);
   const [workDays, setWorkDays] = React.useState<number[]>([1, 2, 3, 4, 5]);
   const [timezone, setTimezone] = React.useState("UTC");
-  const [apiKey, setApiKey] = React.useState("");
+  const [ollamaUrl, setOllamaUrl] = React.useState("http://localhost:11434");
+  const [ollamaModel, setOllamaModel] = React.useState("llama3.2");
 
   React.useEffect(() => {
-    async function fetchSettings() {
-      try {
-        const res = await fetch("/api/settings");
-        if (res.ok) {
-          const data: Settings = await res.json();
-          setSettings(data);
-          setWorkStartHour(data.workStartHour);
-          setWorkEndHour(data.workEndHour);
-          setWorkDays(
-            data.workDays
-              .split(",")
-              .map(Number)
-              .filter((n) => !isNaN(n))
-          );
-          setTimezone(data.timezone);
-          setApiKey(data.anthropicApiKey ?? "");
-        }
-      } catch {
-        setError("Failed to load settings.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchSettings();
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data: Settings) => {
+        setWorkStartHour(data.workStartHour);
+        setWorkEndHour(data.workEndHour);
+        setWorkDays(data.workDays.split(",").map(Number).filter((n) => !isNaN(n)));
+        setTimezone(data.timezone);
+        setOllamaUrl(data.ollamaUrl ?? "http://localhost:11434");
+        setOllamaModel(data.ollamaModel ?? "llama3.2");
+      })
+      .catch(() => setError("Failed to load settings."))
+      .finally(() => setLoading(false));
   }, []);
 
   function toggleDay(day: number) {
@@ -92,17 +77,9 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workStartHour,
-          workEndHour,
-          workDays,
-          timezone,
-          anthropicApiKey: apiKey || null,
-        }),
+        body: JSON.stringify({ workStartHour, workEndHour, workDays, timezone, ollamaUrl, ollamaModel }),
       });
       if (!res.ok) throw new Error("Failed to save");
-      const data = await res.json();
-      setSettings(data);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -163,8 +140,6 @@ export default function SettingsPage() {
               />
             </div>
           </div>
-
-          {/* Work days */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-zinc-400">Work Days</label>
             <div className="flex gap-2">
@@ -195,43 +170,44 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <Input
-            placeholder="e.g. America/New_York"
+            placeholder="e.g. Europe/Warsaw"
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
             disabled={loading}
           />
           <p className="mt-1.5 text-xs text-zinc-600">
-            Use IANA timezone names, e.g. America/New_York, Europe/London, Asia/Tokyo.
+            IANA timezone name, e.g. Europe/Warsaw, America/New_York, Asia/Tokyo.
           </p>
         </CardContent>
       </Card>
 
-      {/* Anthropic API Key */}
+      {/* Ollama AI */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Anthropic API Key</CardTitle>
+          <CardTitle className="text-base">AI (Ollama)</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <div className="relative">
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-400">Ollama URL</label>
             <Input
-              type={showApiKey ? "text" : "password"}
-              placeholder="sk-ant-api03-…"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="http://localhost:11434"
+              value={ollamaUrl}
+              onChange={(e) => setOllamaUrl(e.target.value)}
               disabled={loading}
-              className="pr-10"
             />
-            <button
-              type="button"
-              onClick={() => setShowApiKey((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-            >
-              {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
           </div>
-          <p className="text-xs text-zinc-600">
-            Used for AI task generation and scheduling. Leave blank to use the server-side key.
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-zinc-400">Model</label>
+            <Input
+              placeholder="llama3.2"
+              value={ollamaModel}
+              onChange={(e) => setOllamaModel(e.target.value)}
+              disabled={loading}
+            />
+            <p className="text-xs text-zinc-600">
+              Any model available in your Ollama instance, e.g. llama3.2, mistral, qwen2.5, gemma3.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -245,11 +221,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               {session.user.image && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={session.user.image}
-                  alt="Avatar"
-                  className="h-8 w-8 rounded-full"
-                />
+                <img src={session.user.image} alt="Avatar" className="h-8 w-8 rounded-full" />
               )}
               <div>
                 <p className="text-sm font-medium text-zinc-200">{session.user.name}</p>

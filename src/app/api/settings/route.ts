@@ -9,7 +9,6 @@ export async function GET() {
   }
   const userId = session.user.id as string;
 
-
   const settings = await db.userSettings.upsert({
     where: { userId },
     update: {},
@@ -19,6 +18,8 @@ export async function GET() {
       workEndHour: 18,
       workDays: "1,2,3,4,5",
       timezone: "UTC",
+      ollamaUrl: "http://localhost:11434",
+      ollamaModel: "llama3.2",
     },
   });
 
@@ -32,9 +33,8 @@ export async function PATCH(req: NextRequest) {
   }
   const userId = session.user.id as string;
 
-
   const body = await req.json();
-  const { workStartHour, workEndHour, workDays, timezone, anthropicApiKey } = body;
+  const { workStartHour, workEndHour, workDays, timezone, ollamaUrl, ollamaModel } = body;
 
   const data: Record<string, unknown> = {};
   if (workStartHour !== undefined) data.workStartHour = Number(workStartHour);
@@ -42,7 +42,8 @@ export async function PATCH(req: NextRequest) {
   if (workDays !== undefined)
     data.workDays = Array.isArray(workDays) ? workDays.join(",") : workDays;
   if (timezone !== undefined) data.timezone = timezone;
-  if (anthropicApiKey !== undefined) data.anthropicApiKey = anthropicApiKey;
+  if (ollamaUrl !== undefined) data.ollamaUrl = ollamaUrl;
+  if (ollamaModel !== undefined) data.ollamaModel = ollamaModel;
 
   const settings = await db.userSettings.upsert({
     where: { userId },
@@ -57,7 +58,8 @@ export async function PATCH(req: NextRequest) {
           : workDays
         : "1,2,3,4,5",
       timezone: timezone ?? "UTC",
-      anthropicApiKey: anthropicApiKey ?? null,
+      ollamaUrl: ollamaUrl ?? "http://localhost:11434",
+      ollamaModel: ollamaModel ?? "llama3.2",
     },
   });
 

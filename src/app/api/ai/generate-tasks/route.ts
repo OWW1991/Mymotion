@@ -28,12 +28,12 @@ export async function POST(req: NextRequest) {
   const settings = await db.userSettings.findUnique({
     where: { userId },
   });
-  const apiKey = settings?.anthropicApiKey ?? undefined;
+  const ollamaConfig = { url: settings?.ollamaUrl, model: settings?.ollamaModel };
 
   const generatedTasks = await generateTasksFromProject(
     project.name,
     description ?? project.description ?? "",
-    apiKey
+    ollamaConfig
   );
 
   // Get max order for existing tasks in the project

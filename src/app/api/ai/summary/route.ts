@@ -30,9 +30,9 @@ export async function POST(req: NextRequest) {
   const settings = await db.userSettings.findUnique({
     where: { userId },
   });
-  const apiKey = settings?.anthropicApiKey ?? undefined;
+  const ollamaConfig = { url: settings?.ollamaUrl, model: settings?.ollamaModel };
 
-  const summary = await generateProjectSummary(project, project.tasks, apiKey);
+  const summary = await generateProjectSummary(project, project.tasks, ollamaConfig);
 
   await db.project.update({
     where: { id: projectId },

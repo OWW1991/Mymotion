@@ -1,13 +1,50 @@
-import Anthropic from "@anthropic-ai/sdk";
+// ─── Ollama client ────────────────────────────────────────────────────────────
 
-function getClient(apiKey?: string): Anthropic {
-  const key = apiKey ?? process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    throw new Error(
-      "Anthropic API key is required. Set ANTHROPIC_API_KEY env var or pass apiKey param."
-    );
+interface OllamaConfig {
+  url?: string;
+  model?: string;
+}
+
+async function ollamaChat(
+  systemPrompt: string,
+  userPrompt: string,
+  config?: OllamaConfig
+): Promise<string> {
+  const baseUrl = config?.url ?? process.env.OLLAMA_URL ?? "http://localhost:11434";
+  const model = config?.model ?? process.env.OLLAMA_MODEL ?? "llama3.2";
+
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Ollama error ${response.status}: ${text}`);
   }
-  return new Anthropic({ apiKey: key });
+
+  const data = (await response.json()) as { message?: { content?: string } };
+  return data.message?.content ?? "";
+}
+
+function extractJson<T>(text: string): T {
+  // Strip markdown fences if present
+  const clean = text.replace(/```(?:json)?\n?/g, "").trim();
+  try {
+    return JSON.parse(clean) as T;
+  } catch {
+    const match = clean.match(/[\[{][\s\S]*[\]}]/);
+    if (match) return JSON.parse(match[0]) as T;
+    throw new Error(`Could not parse JSON from AI response: ${text}`);
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,61 +76,28 @@ export interface ScheduledBlock {
 export async function generateTasksFromProject(
   projectName: string,
   projectDescription: string,
-  apiKey?: string
+  config?: OllamaConfig
 ): Promise<GeneratedTask[]> {
-  const client = getClient(apiKey);
+  const systemPrompt =
+    "You are a project management assistant. Break down projects into actionable tasks. " +
+    "Respond with valid JSON only — no markdown fences, no extra text.";
 
-  const systemPrompt = `You are a project management assistant that helps break down projects into actionable tasks.
-When given a project name and description, you create a structured list of tasks that covers all the work needed to complete the project.
-Each task should be specific, actionable, and independently completable.
-Always respond with valid JSON only — no markdown fences, no extra text.`;
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `Break down the following project into actionable tasks.
+  const userPrompt = `Break down the following project into actionable tasks.
 
 Project Name: ${projectName}
 Project Description: ${projectDescription}
 
 Return a JSON array of tasks. Each task must have:
 - title: string (short, action-oriented)
-- description: string (1-2 sentences explaining what to do)
-- priority: one of "LOW", "MEDIUM", "HIGH", "URGENT"
-- estimatedMinutes: number (realistic time estimate)
+- description: string (1-2 sentences)
+- priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+- estimatedMinutes: number
 
-Return ONLY the JSON array, no other text.`,
-      },
-    ],
-  });
+Return ONLY the JSON array.`;
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      return parsed as GeneratedTask[];
-    }
-    return [];
-  } catch {
-    // Attempt to extract JSON array from the text if parsing fails
-    const match = text.match(/\[[\s\S]*\]/);
-    if (match) {
-      return JSON.parse(match[0]) as GeneratedTask[];
-    }
-    throw new Error(`Failed to parse AI response as JSON: ${text}`);
-  }
+  const text = await ollamaChat(systemPrompt, userPrompt, config);
+  const parsed = extractJson<GeneratedTask[]>(text);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 // ─── prioritizeTasks ──────────────────────────────────────────────────────────
@@ -108,13 +112,11 @@ export async function prioritizeTasks(
     estimatedMinutes: number;
   }>,
   context: string,
-  apiKey?: string
+  config?: OllamaConfig
 ): Promise<PrioritizedTask[]> {
-  const client = getClient(apiKey);
-
-  const systemPrompt = `You are a productivity expert that helps people prioritize their work effectively.
-You analyze tasks, deadlines, and context to determine the optimal order and priority for getting things done.
-Always respond with valid JSON only — no markdown fences, no extra text.`;
+  const systemPrompt =
+    "You are a productivity expert. Analyze tasks and return optimal priority order. " +
+    "Respond with valid JSON only — no markdown fences, no extra text.";
 
   const tasksJson = tasks.map((t) => ({
     id: t.id,
@@ -125,20 +127,7 @@ Always respond with valid JSON only — no markdown fences, no extra text.`;
     estimatedMinutes: t.estimatedMinutes,
   }));
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `Prioritize the following tasks based on the provided context.
+  const userPrompt = `Prioritize the following tasks.
 
 Context: ${context}
 
@@ -148,31 +137,15 @@ ${JSON.stringify(tasksJson, null, 2)}
 Return a JSON array where each item has:
 - id: string (same as input)
 - title: string (same as input)
-- priority: one of "LOW", "MEDIUM", "HIGH", "URGENT" (may differ from currentPriority)
-- reasoning: string (1 sentence explaining why this priority)
-- order: number (1 = highest priority, ascending)
+- priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+- reasoning: string (1 sentence)
+- order: number (1 = highest priority)
 
-Return ONLY the JSON array, no other text.`,
-      },
-    ],
-  });
+Return ONLY the JSON array.`;
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      return parsed as PrioritizedTask[];
-    }
-    return [];
-  } catch {
-    const match = text.match(/\[[\s\S]*\]/);
-    if (match) {
-      return JSON.parse(match[0]) as PrioritizedTask[];
-    }
-    throw new Error(`Failed to parse AI response as JSON: ${text}`);
-  }
+  const text = await ollamaChat(systemPrompt, userPrompt, config);
+  const parsed = extractJson<PrioritizedTask[]>(text);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 // ─── generateDaySchedule ──────────────────────────────────────────────────────
@@ -187,44 +160,24 @@ export async function generateDaySchedule(
   }>,
   events: Array<{
     title: string;
-    startTime: string; // ISO string
-    endTime: string;   // ISO string
+    startTime: string;
+    endTime: string;
   }>,
-  workStart: number, // hour, e.g. 9
-  workEnd: number,   // hour, e.g. 18
-  date: string,      // YYYY-MM-DD
-  apiKey?: string
+  workStart: number,
+  workEnd: number,
+  date: string,
+  config?: OllamaConfig
 ): Promise<ScheduledBlock[]> {
-  const client = getClient(apiKey);
+  const systemPrompt =
+    "You are a scheduling assistant. Fit tasks into free time slots respecting work hours and existing events. " +
+    "Respond with valid JSON only — no markdown fences, no extra text.";
 
-  const systemPrompt = `You are a scheduling assistant that creates optimized daily schedules.
-You fit tasks into available time slots, respecting existing calendar events and work hours.
-Prioritize urgent and high-priority tasks earlier in the day.
-Always respond with valid JSON only — no markdown fences, no extra text.`;
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `Create a schedule for ${date}.
+  const userPrompt = `Create a schedule for ${date}.
 
 Work hours: ${workStart}:00 to ${workEnd}:00
 
-Existing calendar events (blocked time):
-${
-  events.length > 0
-    ? JSON.stringify(events, null, 2)
-    : "No existing events."
-}
+Existing events (blocked):
+${events.length > 0 ? JSON.stringify(events, null, 2) : "None."}
 
 Tasks to schedule:
 ${JSON.stringify(
@@ -239,40 +192,18 @@ ${JSON.stringify(
   2
 )}
 
-Return a JSON array of scheduled blocks. Each block must have:
-- taskId: string (matching task id)
-- startTime: string (ISO 8601 datetime, e.g. "${date}T09:00:00.000Z")
-- endTime: string (ISO 8601 datetime)
-- date: string (YYYY-MM-DD, i.e. "${date}")
+Return a JSON array of scheduled blocks, each with:
+- taskId: string
+- startTime: ISO 8601 (e.g. "${date}T09:00:00.000Z")
+- endTime: ISO 8601
+- date: "${date}"
 
-Rules:
-- Do not overlap with existing calendar events.
-- Only schedule within work hours.
-- Include a 5-minute buffer between tasks.
-- Skip tasks that don't fit in remaining time.
-- Urgent tasks first, then High, then Medium, then Low.
+Rules: no overlaps, 5-min buffer between tasks, URGENT → HIGH → MEDIUM → LOW order.
+Return ONLY the JSON array.`;
 
-Return ONLY the JSON array, no other text.`,
-      },
-    ],
-  });
-
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  try {
-    const parsed = JSON.parse(text);
-    if (Array.isArray(parsed)) {
-      return parsed as ScheduledBlock[];
-    }
-    return [];
-  } catch {
-    const match = text.match(/\[[\s\S]*\]/);
-    if (match) {
-      return JSON.parse(match[0]) as ScheduledBlock[];
-    }
-    throw new Error(`Failed to parse AI response as JSON: ${text}`);
-  }
+  const text = await ollamaChat(systemPrompt, userPrompt, config);
+  const parsed = extractJson<ScheduledBlock[]>(text);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 // ─── generateProjectSummary ───────────────────────────────────────────────────
@@ -293,47 +224,27 @@ export async function generateProjectSummary(
     completedAt?: Date | null;
     dueDate?: Date | null;
   }>,
-  apiKey?: string
+  config?: OllamaConfig
 ): Promise<string> {
-  const client = getClient(apiKey);
-
-  const systemPrompt = `You are a project analyst that generates concise, insightful project summaries.
-Write in clear, professional markdown. Focus on progress, risks, and next steps.`;
+  const systemPrompt =
+    "You are a project analyst. Write concise, insightful project summaries in markdown. " +
+    "Focus on progress, risks, and next steps.";
 
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "DONE").length;
-  const inProgressTasks = tasks.filter(
-    (t) => t.status === "IN_PROGRESS"
-  ).length;
+  const inProgressTasks = tasks.filter((t) => t.status === "IN_PROGRESS").length;
   const urgentTasks = tasks.filter(
     (t) => t.priority === "URGENT" && t.status !== "DONE"
   ).length;
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1024,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `Generate a project summary in markdown for the following project.
+  const userPrompt = `Generate a project summary in markdown.
 
 Project: ${project.name}
-Description: ${project.description ?? "No description provided."}
+Description: ${project.description ?? "No description."}
 Created: ${project.createdAt.toISOString()}
 
-Statistics:
-- Total tasks: ${totalTasks}
-- Completed: ${doneTasks}
-- In progress: ${inProgressTasks}
-- Urgent/unfinished: ${urgentTasks}
-- Completion rate: ${totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0}%
+Stats: ${doneTasks}/${totalTasks} done, ${inProgressTasks} in progress, ${urgentTasks} urgent pending.
+Completion: ${totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0}%
 
 Tasks:
 ${JSON.stringify(
@@ -343,19 +254,12 @@ ${JSON.stringify(
     priority: t.priority,
     estimatedMinutes: t.estimatedMinutes,
     dueDate: t.dueDate?.toISOString() ?? null,
-    completedAt: t.completedAt?.toISOString() ?? null,
   })),
   null,
   2
 )}
 
-Write a markdown summary with sections: Overview, Progress, Key Risks, and Next Steps.
-Keep it concise (under 300 words).`,
-      },
-    ],
-  });
+Write sections: Overview, Progress, Key Risks, Next Steps. Keep under 300 words.`;
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-  return text;
+  return await ollamaChat(systemPrompt, userPrompt, config);
 }

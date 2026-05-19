@@ -134,7 +134,8 @@ model UserSettings {
   workEndHour    Int     @default(18)
   workDays       String  @default("1,2,3,4,5")
   timezone       String  @default("UTC")
-  anthropicApiKey String?
+  ollamaUrl      String  @default("http://localhost:11434")
+  ollamaModel    String  @default("llama3.2")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

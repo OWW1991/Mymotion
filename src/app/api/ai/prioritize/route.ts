@@ -29,13 +29,16 @@ export async function POST(req: NextRequest) {
   const settings = await db.userSettings.findUnique({
     where: { userId },
   });
-  const apiKey = settings?.anthropicApiKey ?? undefined;
+  const ollamaConfig = {
+    url: settings?.ollamaUrl,
+    model: settings?.ollamaModel,
+  };
 
   const context = projectId
     ? `Prioritizing tasks for a specific project.`
     : `Prioritizing all pending tasks for the user's workday.`;
 
-  const prioritized = await prioritizeTasks(tasks, context, apiKey);
+  const prioritized = await prioritizeTasks(tasks, context, ollamaConfig);
 
   // Update tasks in DB with new priorities and order
   const updates = prioritized.map((p) =>

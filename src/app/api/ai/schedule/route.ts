@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const workStartHour = settings?.workStartHour ?? 9;
   const workEndHour = settings?.workEndHour ?? 18;
   const timezone = settings?.timezone ?? "UTC";
-  const apiKey = settings?.anthropicApiKey ?? undefined;
+  const ollamaConfig = { url: settings?.ollamaUrl, model: settings?.ollamaModel };
 
   // Get user's pending tasks
   const tasks = await db.task.findMany({
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     workStartHour,
     workEndHour,
     date,
-    apiKey
+    ollamaConfig
   );
 
   // Save ScheduledBlocks to DB (delete old ones for this date first)
