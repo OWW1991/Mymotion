@@ -1,0 +1,140 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String?       @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  tasks         Task[]
+  projects      Project[]
+  settings      UserSettings?
+  scheduledBlocks ScheduledBlock[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  googleCalendarId  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#6366f1")
+  userId      String
+  tasks       Task[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  aiSummary   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+model Task {
+  id               String          @id @default(cuid())
+  title            String
+  description      String?
+  priority         Priority        @default(MEDIUM)
+  status           TaskStatus      @default(TODO)
+  estimatedMinutes Int             @default(30)
+  scheduledStart   DateTime?
+  scheduledEnd     DateTime?
+  dueDate          DateTime?
+  projectId        String?
+  userId           String
+  googleEventId    String?
+  labels           String          @default("")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  completedAt      DateTime?
+  order            Int             @default(0)
+  scheduledBlocks  ScheduledBlock[]
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScheduledBlock {
+  id            String   @id @default(cuid())
+  taskId        String
+  userId        String
+  startTime     DateTime
+  endTime       DateTime
+  date          DateTime
+  googleEventId String?
+  createdAt     DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserSettings {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  workStartHour  Int     @default(9)
+  workEndHour    Int     @default(18)
+  workDays       String  @default("1,2,3,4,5")
+  timezone       String  @default("UTC")
+  anthropicApiKey String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
