@@ -7,12 +7,14 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const settings = await db.userSettings.upsert({
-    where: { userId: session.user.id },
+    where: { userId },
     update: {},
     create: {
-      userId: session.user.id,
+      userId,
       workStartHour: 9,
       workEndHour: 18,
       workDays: "1,2,3,4,5",
@@ -28,6 +30,8 @@ export async function PATCH(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const { workStartHour, workEndHour, workDays, timezone, anthropicApiKey } = body;
@@ -41,10 +45,10 @@ export async function PATCH(req: NextRequest) {
   if (anthropicApiKey !== undefined) data.anthropicApiKey = anthropicApiKey;
 
   const settings = await db.userSettings.upsert({
-    where: { userId: session.user.id },
+    where: { userId },
     update: data,
     create: {
-      userId: session.user.id,
+      userId,
       workStartHour: workStartHour ?? 9,
       workEndHour: workEndHour ?? 18,
       workDays: workDays

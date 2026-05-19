@@ -7,6 +7,8 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -16,7 +18,7 @@ export async function GET() {
 
   const blocks = await db.scheduledBlock.findMany({
     where: {
-      userId: session.user.id,
+      userId,
       date: { gte: todayStart, lte: todayEnd },
     },
     include: {

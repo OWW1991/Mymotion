@@ -9,11 +9,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { id } = await params;
 
   const project = await db.project.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     include: {
       tasks: {
         include: { project: true },
@@ -34,11 +36,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { id } = await params;
 
   const existing = await db.project.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
   });
   if (!existing) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -65,11 +69,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { id } = await params;
 
   const existing = await db.project.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
   });
   if (!existing) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });

@@ -7,6 +7,8 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") as
@@ -18,7 +20,7 @@ export async function GET(req: NextRequest) {
   const projectId = searchParams.get("projectId");
   const date = searchParams.get("date");
 
-  const where: Record<string, unknown> = { userId: session.user.id };
+  const where: Record<string, unknown> = { userId };
   if (status) where.status = status;
   if (projectId) where.projectId = projectId;
   if (date) {
@@ -62,6 +64,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const {
@@ -80,7 +84,7 @@ export async function POST(req: NextRequest) {
 
   // Get max order for this user
   const maxOrderTask = await db.task.findFirst({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { order: "desc" },
     select: { order: true },
   });
@@ -95,7 +99,7 @@ export async function POST(req: NextRequest) {
       dueDate: dueDate ? new Date(dueDate) : null,
       projectId: projectId ?? null,
       labels: labels ? (Array.isArray(labels) ? labels.join(",") : labels) : "",
-      userId: session.user.id,
+      userId,
       order,
     },
     include: { project: true },

@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
 
   const body = await req.json();
   const { projectId, description } = body;
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const project = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
+    where: { id: projectId, userId },
   });
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   // Get the user's Anthropic API key
   const settings = await db.userSettings.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
   const apiKey = settings?.anthropicApiKey ?? undefined;
 
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   // Get max order for existing tasks in the project
   const maxOrderTask = await db.task.findFirst({
-    where: { userId: session.user.id },
+    where: { userId },
     orderBy: { order: "desc" },
     select: { order: true },
   });
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
           priority: t.priority,
           estimatedMinutes: t.estimatedMinutes,
           projectId: project.id,
-          userId: session.user.id,
+          userId,
           order: orderCounter++,
         },
         include: { project: true },

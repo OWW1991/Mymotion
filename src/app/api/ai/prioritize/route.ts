@@ -8,12 +8,14 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const { projectId } = body as { projectId?: string };
 
   const where: Record<string, unknown> = {
-    userId: session.user.id,
+    userId,
     status: { in: ["TODO", "IN_PROGRESS"] },
   };
   if (projectId) where.projectId = projectId;
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
   }
 
   const settings = await db.userSettings.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
   const apiKey = settings?.anthropicApiKey ?? undefined;
 

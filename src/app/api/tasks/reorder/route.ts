@@ -7,6 +7,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const { tasks } = body as { tasks: { id: string; order: number }[] };
@@ -18,7 +20,7 @@ export async function POST(req: NextRequest) {
   // Verify all tasks belong to the current user
   const taskIds = tasks.map((t) => t.id);
   const existingTasks = await db.task.findMany({
-    where: { id: { in: taskIds }, userId: session.user.id },
+    where: { id: { in: taskIds }, userId },
     select: { id: true },
   });
   const ownedIds = new Set(existingTasks.map((t) => t.id));

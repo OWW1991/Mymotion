@@ -8,9 +8,11 @@ export async function POST() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const account = await db.account.findFirst({
-    where: { userId: session.user.id, provider: "google" },
+    where: { userId, provider: "google" },
   });
 
   if (!account?.access_token) {
@@ -20,10 +22,10 @@ export async function POST() {
     );
   }
 
-  await syncCalendarToDb(session.user.id, account.access_token);
+  await syncCalendarToDb(userId, account.access_token);
 
   const synced = await db.scheduledBlock.count({
-    where: { userId: session.user.id },
+    where: { userId },
   });
 
   return NextResponse.json({ synced });

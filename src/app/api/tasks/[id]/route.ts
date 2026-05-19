@@ -10,11 +10,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { id } = await params;
 
   const task = await db.task.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     include: { project: true, scheduledBlocks: true },
   });
 
@@ -30,11 +32,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { id } = await params;
 
   const existing = await db.task.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
   });
   if (!existing) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -86,11 +90,13 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { id } = await params;
 
   const task = await db.task.findFirst({
-    where: { id, userId: session.user.id },
+    where: { id, userId },
     include: { scheduledBlocks: true },
   });
   if (!task) {
@@ -100,7 +106,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   // Delete Google Calendar events for scheduled blocks
   if (task.scheduledBlocks.length > 0) {
     const account = await db.account.findFirst({
-      where: { userId: session.user.id, provider: "google" },
+      where: { userId, provider: "google" },
     });
     if (account?.access_token) {
       const calendarId = account.googleCalendarId ?? "primary";
@@ -119,7 +125,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   // Delete Google Calendar event attached to the task itself
   if (task.googleEventId) {
     const account = await db.account.findFirst({
-      where: { userId: session.user.id, provider: "google" },
+      where: { userId, provider: "google" },
     });
     if (account?.access_token) {
       try {

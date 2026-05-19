@@ -7,9 +7,11 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const projects = await db.project.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     include: {
       tasks: {
         select: { id: true, status: true },
@@ -32,6 +34,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const { name, description, color } = body;
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
       name,
       description: description ?? null,
       color: color ?? "#6366f1",
-      userId: session.user.id,
+      userId,
     },
   });
 

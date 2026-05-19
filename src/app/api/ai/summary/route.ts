@@ -8,6 +8,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const { projectId } = body;
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   const project = await db.project.findFirst({
-    where: { id: projectId, userId: session.user.id },
+    where: { id: projectId, userId },
     include: { tasks: true },
   });
 
@@ -26,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   const settings = await db.userSettings.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
   const apiKey = settings?.anthropicApiKey ?? undefined;
 

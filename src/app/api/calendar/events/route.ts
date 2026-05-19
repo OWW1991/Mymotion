@@ -8,6 +8,8 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const { searchParams } = new URL(req.url);
   const startDate = searchParams.get("startDate");
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   // Get Google Calendar events
   const account = await db.account.findFirst({
-    where: { userId: session.user.id, provider: "google" },
+    where: { userId, provider: "google" },
   });
 
   let googleEvents: unknown[] = [];
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
   // Get ScheduledBlocks from DB for the range
   const scheduledBlocks = await db.scheduledBlock.findMany({
     where: {
-      userId: session.user.id,
+      userId,
       startTime: { gte: start, lte: end },
     },
     include: {

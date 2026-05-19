@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const userId = session.user.id as string;
+
 
   const body = await req.json();
   const { date } = body as { date: string };
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   // Get user settings
   const settings = await db.userSettings.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
   });
   const workStartHour = settings?.workStartHour ?? 9;
   const workEndHour = settings?.workEndHour ?? 18;
@@ -29,7 +31,7 @@ export async function POST(req: NextRequest) {
   // Get user's pending tasks
   const tasks = await db.task.findMany({
     where: {
-      userId: session.user.id,
+      userId,
       status: { in: ["TODO", "IN_PROGRESS"] },
       estimatedMinutes: { gt: 0 },
     },
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   // Get Google access token
   const account = await db.account.findFirst({
-    where: { userId: session.user.id, provider: "google" },
+    where: { userId, provider: "google" },
   });
 
   let googleEvents: Array<{ title: string; startTime: string; endTime: string }> = [];
@@ -76,7 +78,7 @@ export async function POST(req: NextRequest) {
   const dateEnd = new Date(`${date}T23:59:59.999Z`);
   await db.scheduledBlock.deleteMany({
     where: {
-      userId: session.user.id,
+      userId,
       date: { gte: dateStart, lte: dateEnd },
     },
   });
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest) {
       return db.scheduledBlock.create({
         data: {
           taskId: block.taskId,
-          userId: session.user.id,
+          userId,
           startTime: new Date(block.startTime),
           endTime: new Date(block.endTime),
           date: new Date(`${block.date}T00:00:00.000Z`),
